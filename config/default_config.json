@@ -1,0 +1,52 @@
+{
+    "app": {
+        "name": "Bangla VoiceTyper",
+        "version": "1.0.0"
+    },
+    "about": {
+        "developer": "Developer Name",
+        "whatsapp": "",
+        "facebook": ""
+    },
+    "license": {
+        "key": ""
+    },
+    "speech": {
+        "engine": "google",
+        "whisper_model": "small",
+        "language": "bn",
+        "sample_rate": 16000,
+        "channels": 1,
+        "silence_threshold": 500,
+        "silence_duration": 0.8,
+        "max_duration": 30
+    },
+    "typing": {
+        "speed": "fast",
+        "auto_punctuation": true,
+        "fix_spacing": true,
+        "word_uppercase": true
+    },
+    "hotkey": {
+        "toggle": "ctrl+shift+b",
+        "push_to_talk": "ctrl+b"
+    },
+    "audio": {
+        "input_device": "default",
+        "output_device": "default",
+        "noise_suppression": true,
+        "volume_boost": 1.0
+    },
+    "behavior": {
+        "start_minimized": true,
+        "close_to_tray": true,
+        "remember_last": true,
+        "auto_start": false
+    },
+    "appearance": {
+        "theme": "dark",
+        "accent_color": "#00bcd4",
+        "font_family": "Segoe UI",
+        "font_size": 13
+    }
+}

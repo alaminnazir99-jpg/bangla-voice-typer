@@ -1,0 +1,26 @@
+# Bangla VoiceTyper - Dependency List
+# ===========================================
+# SPEECH
+# Google Speech (online, default) - needs internet
+speechrecognition>=3.10.0
+# OpenAI Whisper (offline, best accuracy) - OPTIONAL, heavy (~2-3GB with torch).
+# Install only if you want offline recognition:  pip install openai-whisper
+# openai-whisper>=20231117
+# Vosk (offline, lightweight) - needs model download separately
+vosk>=0.3.45
+scipy>=1.10.0
+pyaudio>=0.2.13
+sounddevice>=0.4.6
+numpy>=1.24.0
+
+# GUI
+PyQt6>=6.6.0
+PyQt6-Qt6>=6.6.0
+
+# System integration
+pynput>=1.7.6
+keyboard>=0.13.5
+
+# Utility
+pyperclip>=1.8.2
+pillow>=10.0.0

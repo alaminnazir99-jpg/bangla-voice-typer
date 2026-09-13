@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+*.egg
+dist/
+build/
+*.spec
+
+# Virtual environment
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# PyInstaller output
+*.exe
+*.exe.bak
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Build artifacts
+build_keygen/
+
+# User settings (contains license key)
+# Keep config.json in repo so new installs have defaults,
+# but user config with keys is stored at %APPDATA%
