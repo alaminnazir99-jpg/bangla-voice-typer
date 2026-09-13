@@ -26,17 +26,20 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
+# Ensure the log/config directory exists BEFORE configuring logging.
+# On a fresh computer %APPDATA%\\BanglaVoiceTyper does not exist yet; if
+# we create the FileHandler before the folder, the app crashes instantly
+# on import - the most common "unhandled exception" on other PCs.
+APPDATA_DIR = os.path.join(os.environ.get("APPDATA", "."), "BanglaVoiceTyper")
+os.makedirs(APPDATA_DIR, exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     handlers=[
         logging.StreamHandler(),
         logging.FileHandler(
-            os.path.join(
-                os.environ.get("APPDATA", "."),
-                "BanglaVoiceTyper",
-                "app.log",
-            ),
+            os.path.join(APPDATA_DIR, "app.log"),
             encoding="utf-8",
         ),
     ],
@@ -45,14 +48,14 @@ logger = logging.getLogger(__name__)
 
 
 def _write_crash_report(text: str) -> str:
-    """Write a crash report to the Desktop so it is easy to find/send.
+    """Write a crash report to the real Desktop so it is easy to find/send.
 
-    Returns the path written, or '' if it could not be written.
+    Uses the Windows known-folder API so it works even when the Desktop is
+    redirected to OneDrive (common on Windows 10/11). Returns the path
+    written, or '' if it could not be written.
     """
     try:
-        desktop = os.path.join(os.path.expanduser("~"), "Desktop")
-        if not os.path.isdir(desktop):
-            desktop = os.environ.get("USERPROFILE", os.path.expanduser("~"))
+        desktop = _desktop_folder()
         path = os.path.join(desktop, "BanglaVoiceTyper_crash.txt")
         with open(path, "w", encoding="utf-8") as f:
             f.write("Bangla VoiceTyper - crash report\n")
@@ -61,6 +64,32 @@ def _write_crash_report(text: str) -> str:
         return path
     except Exception:
         return ""
+
+
+def _desktop_folder() -> str:
+    """Return the user's real Desktop path via SHGetKnownFolderPath."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        FOLDERID_Desktop = ctypes.c_char_p(
+            b"{B4BFCC3A-DB2C-424C-B029-7FE99A87C641}"
+        )
+        p_path = ctypes.c_void_p()
+        if (
+            ctypes.windll.shell32.SHGetKnownFolderPath(
+                FOLDERID_Desktop, 0, None, ctypes.byref(p_path)
+            )
+            == 0
+            and p_path.value
+        ):
+            path = ctypes.wstring_at(p_path.value)
+            ctypes.windll.ole32.CoTaskMemFree(p_path.value)
+            if path:
+                return path
+    except Exception:
+        pass
+    return os.path.join(os.path.expanduser("~"), "Desktop")
 
 
 def _show_crash_dialog(text: str) -> None:
@@ -208,8 +237,10 @@ def _single_instance_lock():
     """Acquire a Windows named mutex so only one instance runs.
 
     Uses ctypes/CreateMutexW which works reliably with PyInstaller onefile
-    builds. Returns the handle if acquired, or None if another instance
-    already holds the mutex.
+    builds. Returns True if THIS instance owns the mutex (should keep
+    running), False if another instance already holds it, and True if the
+    mutex could not be created at all (better to keep going than to block
+    the user because of a rare system error).
     """
     import ctypes
     from ctypes import wintypes
@@ -217,15 +248,13 @@ def _single_instance_lock():
     ERROR_ALREADY_EXISTS = 183
     name = "BanglaVoiceTyper_SingleInstanceMutex"
 
-    handle = ctypes.windll.kernel32.CreateMutexW(
-        None, False, name
-    )
+    handle = ctypes.windll.kernel32.CreateMutexW(None, False, name)
     if not handle:
-        # Mutex creation failed for another reason - allow to continue.
-        return None
+        # Rare system error - don't block the user, let the app continue.
+        return True
     if ctypes.windll.kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
-        return None
-    return handle
+        return False
+    return True
 
 
 def main():
@@ -260,8 +289,7 @@ def main():
         quietly exits (the running instance keeps working).
         """
         # Single-instance guard (Windows named mutex).
-        _mutex_handle = _single_instance_lock()
-        if _mutex_handle is None:
+        if not _single_instance_lock():
             logger.info("Another instance is already running - exiting.")
             sys.exit(0)
 
@@ -303,6 +331,18 @@ def main():
             logger.info("Ctrl+Shift+B global hotkey registered (native).")
         else:
             logger.warning("Failed to register global hotkey.")
+            # Tell the user visibly - otherwise they'd have an app running
+            # yet the hotkey silently does nothing.
+            try:
+                window._refresh_tray_status(
+                    "হটকি (Ctrl+Shift+B) রেজিস্টার করা যায়নি। "
+                    "আরেকটি প্রোগ্রাম একই হটকি ব্যবহার করতে পারে।"
+                )
+                window.status_label.setText(
+                    "হটকি ব্যর্থ — Ctrl+Shift+B অন্য প্রোগ্রাম ব্যবহার করছে।"
+                )
+            except Exception:
+                pass
         window.hotkey_manager = hotkey_mgr
 
         # Recover from system sleep/resume: Windows disrupts the audio
@@ -310,9 +350,14 @@ def main():
         # Wait a moment for the audio service to settle, then reset the
         # worker's audio subsystem and re-register the hotkey for safety.
         def _on_power_resume():
-            QTimer.singleShot(2000, window.worker.power_resumed)
-            if not hotkey_mgr.register(MOD_CONTROL | MOD_SHIFT, vk):
-                logger.warning("Hotkey re-register failed after resume.")
+            # Worker may not exist yet (before first use) - guard it.
+            if window.worker is not None:
+                QTimer.singleShot(2000, window.worker.power_resumed)
+            try:
+                if not hotkey_mgr.register(MOD_CONTROL | MOD_SHIFT, vk):
+                    logger.warning("Hotkey re-register failed after resume.")
+            except Exception:
+                pass
 
         hotkey_mgr._on_resume = _on_power_resume
 
@@ -352,4 +397,17 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SystemExit:
+        raise
+    except Exception:
+        import traceback
+        text = "".join(traceback.format_exc())
+        try:
+            logger.error("FATAL STARTUP ERROR:\n%s", text)
+        except Exception:
+            pass
+        _write_crash_report(text)
+        _show_crash_dialog(text)
+        sys.exit(1)

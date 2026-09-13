@@ -574,14 +574,16 @@ class MainWindow(QMainWindow):
                 except Exception:
                     pass
 
-    def _refresh_tray_status(self, message: str) -> None:
+    def _refresh_tray_status(
+        self, message: str, icon: QSystemTrayIcon.MessageIcon = None
+    ) -> None:
         """Show a non-blocking tray notification without resetting the icon."""
         if hasattr(self, "tray") and self.tray is not None:
             try:
                 self.tray.showMessage(
                     "Bangla VoiceTyper",
                     message,
-                    QSystemTrayIcon.MessageIcon.Information,
+                    icon or QSystemTrayIcon.MessageIcon.Information,
                     2000,
                 )
             except Exception:
@@ -690,10 +692,14 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(str)
     def on_worker_error(self, msg: str) -> None:
-        """Handle worker errors."""
+        """Handle worker errors - show them visibly via tray + status."""
         self.status_label.setText(f"ত্রুটি: {msg}")
         self.visualizer.set_state("error")
         QTimer.singleShot(2000, lambda: self.visualizer.set_state("idle"))
+        self._refresh_tray_status(
+            f"ত্রুটি: {msg}",
+            icon=QSystemTrayIcon.MessageIcon.Warning,
+        )
 
     def clear_text(self) -> None:
         """Clear the live text editor."""
