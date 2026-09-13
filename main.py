@@ -295,16 +295,47 @@ def main():
 
         # --- License gate: the app won't run without a valid key. ---
         from core.license import validate
+        from core import online as license_online
+
         stored_key = settings.get("license", "key", "") or ""
         if not validate(stored_key):
             from gui.activation_dialog import request_activation
-            key = request_activation()
+            key = request_activation(settings)
             if not key:
                 logger.warning("License activation cancelled - exiting.")
                 sys.exit(0)
             settings.set("license", "key", key)
             settings_manager.save(settings)
             logger.info("License activated.")
+        elif license_online.is_online(settings):
+            # Online mode: confirm the key is bound to THIS device before
+            # letting the app run. Offline: allow a 7-day grace so a buyer
+            # with no internet is not locked out instantly.
+            import datetime
+            from PyQt6.QtWidgets import QMessageBox
+            result = license_online.verify(settings, stored_key)
+            if result.get("ok"):
+                settings.set("license", "last_verified", datetime.date.today().isoformat())
+                settings_manager.save(settings)
+            elif result.get("reachable"):
+                # Server reachable but key not bound to this device.
+                QMessageBox.critical(
+                    None, "Bangla VoiceTyper",
+                    "এই লাইসেন্স এই কম্পিউটারে বৈধ নয়।\n\n"
+                    "একটি বৈধ key-এর জন্য ডেভলপারের সাথে যোগাযোগ করুন।",
+                )
+                sys.exit(0)
+            else:
+                # Server unreachable: offline grace period.
+                if license_online.within_grace(settings):
+                    logger.info("Offline grace period - continuing.")
+                else:
+                    QMessageBox.critical(
+                        None, "Bangla VoiceTyper",
+                        "লাইসেন্স যাচাই করার জন্য ইন্টারনেট দরকার।\n\n"
+                        f"{result.get('message', 'সার্ভার পাওয়া যায়নি।')}",
+                    )
+                    sys.exit(0)
 
         from gui.main_window import MainWindow
 

@@ -15,14 +15,16 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from core.license import validate
+from core.license import normalize, validate, format_key
+from core import online
 
 
 class ActivationDialog(QDialog):
     """Enter a license key; on success exposes ``accepted_key``."""
 
-    def __init__(self, parent=None):
+    def __init__(self, settings, parent=None):
         super().__init__(parent)
+        self.settings = settings
         self.setWindowTitle("Bangla VoiceTyper - লাইসেন্স সক্রিয়করণ")
         self.setFixedWidth(440)
         self.setModal(True)
@@ -94,16 +96,36 @@ class ActivationDialog(QDialog):
 
     def _activate(self):
         key = self.key_input.text().strip()
-        if validate(key):
-            self.accepted_key = key
-            self.accept()
-        else:
+        # Cheap local format check first (same for offline and online mode).
+        if not validate(key):
             self.error_label.setText("কি টি বৈধ নয়। সঠিক কি দিয়ে চেষ্টা করুন।")
+            return
+
+        if online.is_online(self.settings):
+            self.activate_btn.setEnabled(False)
+            self.activate_btn.setText("যাচাই হচ্ছে...")
+            try:
+                result = online.activate(self.settings, normalize(key))
+            except Exception as exc:
+                result = {"ok": False, "message": f"যাচাই-এ সমস্যা: {exc}"}
+            finally:
+                self.activate_btn.setEnabled(True)
+                self.activate_btn.setText("সক্রিয় করুন")
+
+            if result.get("ok"):
+                self.accepted_key = format_key(key)
+                self.accept()
+            else:
+                self.error_label.setText(result.get("message", "সক্রিয় করা যায়নি।"))
+                return
+        else:
+            self.accepted_key = format_key(key)
+            self.accept()
 
 
-def request_activation(parent=None) -> str:
+def request_activation(settings, parent=None) -> str:
     """Show the activation dialog; return the accepted key or '' if closed."""
-    dlg = ActivationDialog(parent)
+    dlg = ActivationDialog(settings, parent)
     if dlg.exec() == QDialog.DialogCode.Accepted:
         return dlg.accepted_key
     return ""

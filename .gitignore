@@ -32,3 +32,6 @@ build_keygen/
 # User settings (contains license key)
 # Keep config.json in repo so new installs have defaults,
 # but user config with keys is stored at %APPDATA%
+
+# License server data (contains sold keys + device bindings)
+server/keys.json

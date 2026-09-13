@@ -9,7 +9,9 @@
         "facebook": "https://www.facebook.com/alaminphysics01"
     },
     "license": {
-        "key": ""
+        "key": "",
+        "server": "",
+        "last_verified": ""
     },
     "speech": {
         "engine": "google",
